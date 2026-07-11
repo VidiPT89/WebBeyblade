@@ -833,11 +833,67 @@ function drawPullIndicators() {
   }
 }
 
+/**
+ * A dimmed, non-spinning preview of a not-yet-launched top, shown at its
+ * default pull-back spot so the "drag back from your top" hint has
+ * something to actually point at.
+ */
+function drawRestingTop(preset, x, y) {
+  const r = preset.radius;
+  ctx.save();
+  ctx.globalAlpha = 0.5;
+
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = "#141522";
+  ctx.fill();
+  ctx.shadowColor = preset.glow;
+  ctx.shadowBlur = 10;
+  ctx.strokeStyle = preset.glow;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = preset.body;
+  for (let i = 0; i < 6; i++) {
+    const a0 = (i * Math.PI) / 3;
+    const outer = r * 0.95, inner = r * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x + Math.cos(a0) * outer, y + Math.sin(a0) * outer);
+    ctx.lineTo(x + Math.cos(a0 + 0.32) * inner, y + Math.sin(a0 + 0.32) * inner);
+    ctx.lineTo(x + Math.cos(a0 - 0.32) * inner, y + Math.sin(a0 - 0.32) * inner);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.34, 0, Math.PI * 2);
+  ctx.fillStyle = "#0d0e18";
+  ctx.strokeStyle = preset.glow;
+  ctx.lineWidth = 2;
+  ctx.fill(); ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = 0.55;
+  ctx.fillStyle = "rgba(255,255,255,0.8)";
+  ctx.font = "11px 'JetBrains Mono', monospace";
+  ctx.textAlign = "center";
+  ctx.fillText(preset.name, x, y + r + 18);
+  ctx.restore();
+}
+
 function draw() {
   drawArena();
   drawPullIndicators();
-  if (player) drawTop(player);
-  if (cpu) drawTop(cpu);
+  if (player) {
+    if (player.launched) drawTop(player);
+    else if (state.phase === "launch") drawRestingTop(player.preset, state.arena.cx, state.arena.cy + state.arena.radius * 0.62);
+  }
+  if (cpu) {
+    if (cpu.launched) drawTop(cpu);
+    else if (state.phase === "launch") drawRestingTop(cpu.preset, state.arena.cx, state.arena.cy - state.arena.radius * 0.62);
+  }
   drawSparks();
   drawBursts();
 }
