@@ -843,6 +843,14 @@ function drawRestingTop(preset, x, y) {
   ctx.save();
   ctx.globalAlpha = 0.5;
 
+  // Full stamina ring, matching the halo a launched top gets, so the idle
+  // preview reads at the same visual size instead of looking smaller/weaker.
+  ctx.beginPath();
+  ctx.arc(x, y, r + 10, 0, Math.PI * 2);
+  ctx.strokeStyle = preset.glow;
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fillStyle = "#141522";
