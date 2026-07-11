@@ -1427,7 +1427,11 @@ dom.pauseMenuBtn.addEventListener("click", (evt) => {
 });
 dom.homeBtn.addEventListener("click", () => returnToMenu());
 
-dom.p1Special.addEventListener("click", () => { if (state.phase === "battle") fireSpecialMove(player); });
+dom.p1Special.addEventListener("click", () => {
+  if (state.phase !== "battle") return;
+  if (isOnline() && state.online.role === "guest") MP.sendAction("special", {});
+  fireSpecialMove(player);
+});
 dom.p2Special.addEventListener("click", () => { if (state.phase === "battle" && isLocal2P()) fireSpecialMove(cpu); });
 
 dom.roundResultOverlay.addEventListener("click", () => {
