@@ -215,6 +215,35 @@ html, body {
 
 .top-grid-pager { display: none; }
 
+/* ---------- Online lobby ---------- */
+.lobby-idle, .lobby-waiting, .lobby-matched { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.lobby-join-row { display: flex; gap: 10px; align-items: center; }
+.lobby-code-input {
+  background: rgba(255,255,255,0.05);
+  border: 1.5px solid var(--border);
+  color: var(--fg);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  width: 140px;
+  text-align: center;
+}
+.lobby-code-input:focus { outline: none; border-color: var(--accent); }
+.lobby-status { color: var(--muted); font-size: 0.85rem; text-align: center; min-height: 1.2em; }
+.lobby-status.is-error { color: var(--danger); }
+.lobby-code-label { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.1em; color: var(--muted); margin: 0; }
+.lobby-code {
+  font-family: var(--font-arcade);
+  font-size: 1.6rem;
+  color: var(--accent);
+  letter-spacing: 0.15em;
+  margin: 0;
+}
+
 /* ---------- Start / icon row ---------- */
 .start-btn {
   background: var(--accent);

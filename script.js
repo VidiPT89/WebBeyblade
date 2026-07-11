@@ -46,6 +46,23 @@ const TRANSLATIONS = {
     tut4Title: "Special Move", tut4Body: "Spinning and clashing fills your gauge. When it's full, tap the button to unleash your top's spirit.",
     tut5Title: "Win the Match", tut5Body: "Win 2 rounds to take the match. Good luck!",
     introSkipBtn: "Skip",
+    modeOnline: "Online",
+    onlinePlay: "ONLINE PLAY",
+    createRoomBtn: "Create Room", joinRoomBtn: "Join Room", quickPlayBtn: "Quick Play",
+    roomCodePlaceholder: "CODE", joinBtn: "Join", cancelBtn: "Cancel",
+    roomCodeLabel: "ROOM CODE", waitingForOpponent: "Waiting for opponent…",
+    opponentJoined: "Opponent joined! Pick your top below.",
+    waitingForYourPick: "Waiting for you to pick a top…",
+    waitingForOpponentPick: "Waiting for opponent to pick a top…",
+    onlineNotConfigured: "Online play isn't set up yet.",
+    roomNotFound: "That room code wasn't found.",
+    roomFull: "That room is already full.",
+    roomFinished: "That match already ended.",
+    lobbyFull: "Quick Play is full right now — try again shortly.",
+    opponentDisconnected: "Opponent disconnected.",
+    p1WinsOnline: "YOU WON THE ROUND", p2WinsOnline: "OPPONENT WON THE ROUND",
+    onlineMatchWin: "VICTORY!", onlineMatchLose: "DEFEAT",
+    readyBtn: "READY",
   },
   pt: {
     eyebrow: "ARENA DE PIÕES",
@@ -87,6 +104,23 @@ const TRANSLATIONS = {
     tut4Title: "Movimento Especial", tut4Body: "Girar e chocar enche o teu medidor. Quando estiver cheio, toca no botão para libertar o espírito do teu pião.",
     tut5Title: "Vence o Combate", tut5Body: "Ganha 2 rondas para vencer. Boa sorte!",
     introSkipBtn: "Saltar",
+    modeOnline: "Online",
+    onlinePlay: "JOGO ONLINE",
+    createRoomBtn: "Criar Sala", joinRoomBtn: "Entrar em Sala", quickPlayBtn: "Jogo Rápido",
+    roomCodePlaceholder: "CÓDIGO", joinBtn: "Entrar", cancelBtn: "Cancelar",
+    roomCodeLabel: "CÓDIGO DA SALA", waitingForOpponent: "A aguardar adversário…",
+    opponentJoined: "Adversário entrou! Escolhe o teu pião abaixo.",
+    waitingForYourPick: "A aguardar que escolhas um pião…",
+    waitingForOpponentPick: "A aguardar que o adversário escolha um pião…",
+    onlineNotConfigured: "O modo online ainda não está configurado.",
+    roomNotFound: "Esse código de sala não foi encontrado.",
+    roomFull: "Essa sala já está cheia.",
+    roomFinished: "Esse combate já terminou.",
+    lobbyFull: "O Jogo Rápido está cheio agora — tenta novamente em breve.",
+    opponentDisconnected: "O adversário desligou-se.",
+    p1WinsOnline: "VENCESTE A RONDA", p2WinsOnline: "O ADVERSÁRIO VENCEU A RONDA",
+    onlineMatchWin: "VITÓRIA!", onlineMatchLose: "DERROTA",
+    readyBtn: "PRONTO",
   },
 };
 
@@ -171,6 +205,12 @@ const dom = {
   helpOverlay: $("help-overlay"), helpBody: $("help-body"), helpClose: $("help-close"),
   tutorialOverlay: $("tutorial-overlay"), tutorialTitleEl: $("tutorial-title"), tutorialBodyEl: $("tutorial-body"),
   tutorialDots: $("tutorial-dots"), tutorialNext: $("tutorial-next"), tutorialSkip: $("tutorial-skip"),
+  lobbyPanel: $("lobby-panel"),
+  lobbyIdle: $("lobby-idle"), lobbyIdleStatus: $("lobby-idle-status"),
+  lobbyCreateBtn: $("lobby-create-btn"), lobbyJoinBtn: $("lobby-join-btn"), lobbyQuickBtn: $("lobby-quick-btn"),
+  lobbyJoinRow: $("lobby-join-row"), lobbyCodeInput: $("lobby-code-input"), lobbyJoinConfirmBtn: $("lobby-join-confirm-btn"),
+  lobbyWaiting: $("lobby-waiting"), lobbyCodeDisplay: $("lobby-code-display"), lobbyCancelBtn: $("lobby-cancel-btn"),
+  lobbyMatched: $("lobby-matched"), lobbyMatchedStatus: $("lobby-matched-status"),
 };
 
 /* ============================================================
@@ -205,12 +245,23 @@ const state = {
   wins: 0,
   tutorialPage: 1,
   lastTime: 0,
+  online: {
+    active: false, // true once a room is joined/created
+    role: null, // "host" | "guest"
+    code: null,
+    matched: false, // opponent has joined the room
+    myReady: false, oppReady: false,
+    oppOnline: false,
+    lastRoundWinnerIsHost: null,
+  },
 };
 
 let player = null;
 let cpu = null;
 
 function isLocal2P() { return state.matchMode === "player"; }
+function isOnline() { return state.matchMode === "online"; }
+function isAnyMultiplayer() { return isLocal2P() || isOnline(); }
 
 /* ============================================================
    Sound — synthesized via the Web Audio API, no audio files.
@@ -523,6 +574,10 @@ function triggerKO(e, reason) {
 
 function tick(dt, time) {
   if (state.phase !== "battle" || state.paused) return;
+  // The guest doesn't run its own physics — the host is authoritative and
+  // streams state snapshots (see mpApplyRemoteState); running a second,
+  // independently-diverging simulation here would fight the incoming data.
+  if (isOnline() && state.online.role === "guest") return;
 
   if (state.pendingRoundEnd !== null) {
     state.pendingRoundEnd -= dt;
@@ -553,7 +608,8 @@ function tick(dt, time) {
   resolveWallCollision(player);
   resolveWallCollision(cpu);
   resolveTopCollision();
-  if (!isLocal2P()) updateCPUAI(dt);
+  if (!isLocal2P() && !isOnline()) updateCPUAI(dt);
+  if (isOnline() && state.online.role === "host") mpPushHostState();
 }
 
 function concludeRound() {
@@ -569,10 +625,23 @@ function concludeRound() {
     if (state.playerWins > state.cpuWins) { SoundEngine.playMatchWin(); recordMatchResult(true); }
     else { SoundEngine.playRoundLose(); recordMatchResult(false); }
     showMatchOverOverlay();
+    if (isOnline()) {
+      MP.updateRoom({
+        status: "finished", phase: "matchOver",
+        hostWins: state.playerWins, guestWins: state.cpuWins,
+        result: state.playerWins > state.cpuWins ? "host" : "guest",
+      });
+    }
   } else {
     state.phase = "roundResult";
     if (winner === player) SoundEngine.playRoundWin(); else SoundEngine.playRoundLose();
     showRoundResultOverlay(winner);
+    if (isOnline()) {
+      MP.updateRoom({
+        phase: "roundResult", hostWins: state.playerWins, guestWins: state.cpuWins,
+        lastRoundWinner: winner === player ? "host" : "guest",
+      });
+    }
   }
 }
 
@@ -981,11 +1050,23 @@ function refreshTopSelection() {
 }
 
 function setMode(mode) {
+  const wasOnline = isOnline();
   state.matchMode = mode;
   state.menuStep = "main";
   dom.modeRow.querySelectorAll(".pill-btn").forEach((b) => b.classList.toggle("is-active", b.dataset.mode === mode));
-  dom.diffRow.classList.toggle("is-hidden", mode === "player");
+  dom.diffRow.classList.toggle("is-hidden", mode !== "cpu");
   dom.startBtn.textContent = t("pressStart");
+  if (mode === "online") {
+    mpResetLobbyUI();
+    dom.lobbyPanel.classList.remove("is-hidden");
+    dom.topPanel.classList.add("is-hidden");
+    dom.startBtn.classList.add("is-hidden");
+  } else {
+    if (wasOnline) mpLeaveIfActive();
+    dom.lobbyPanel.classList.add("is-hidden");
+    dom.topPanel.classList.remove("is-hidden");
+    dom.startBtn.classList.remove("is-hidden");
+  }
   refreshTopSelection();
 }
 
@@ -1047,7 +1128,7 @@ function updateBattleHud() {
 
   dom.p1SpecialPct.textContent = `${Math.floor(player.specialGauge)}%`;
   dom.p1Special.classList.toggle("is-ready", player.specialGauge >= 100);
-  if (isLocal2P()) {
+  if (isAnyMultiplayer()) {
     dom.p2Special.classList.remove("is-hidden");
     dom.p2SpecialPct.textContent = `${Math.floor(cpu.specialGauge)}%`;
     dom.p2Special.classList.toggle("is-ready", cpu.specialGauge >= 100);
@@ -1084,9 +1165,10 @@ function startRound() {
   dom.iconRow.classList.add("is-hidden");
   dom.roundResultOverlay.classList.add("is-hidden");
   dom.pauseOverlay.classList.add("is-hidden");
+  dom.lobbyPanel.classList.add("is-hidden");
   showLaunchOverlay(true);
   updateBattleHud();
-  if (!isLocal2P()) launchCPUTop();
+  if (!isLocal2P() && !isOnline()) launchCPUTop();
 }
 
 function showRoundResultOverlay(winner) {
@@ -1097,7 +1179,8 @@ function showRoundResultOverlay(winner) {
 function refreshRoundResultText() {
   const winnerIsPlayer = state.lastRoundWinnerIsPlayer;
   let key;
-  if (isLocal2P()) key = winnerIsPlayer ? "p1WinRound" : "p2WinRound";
+  if (isOnline()) key = winnerIsPlayer ? "p1WinsOnline" : "p2WinsOnline";
+  else if (isLocal2P()) key = winnerIsPlayer ? "p1WinRound" : "p2WinRound";
   else key = winnerIsPlayer ? "youWinRound" : "cpuWinRound";
   dom.roundResultTitle.textContent = t(key);
   dom.roundResultSub.textContent = t("tapToContinue");
@@ -1107,6 +1190,7 @@ function showMatchOverOverlay() {
   state.lastMatchWon = state.playerWins > state.cpuWins;
   refreshMatchOverText();
   dom.matchIcon.textContent = state.lastMatchWon ? "🏆" : "💥";
+  dom.matchReplay.classList.toggle("is-hidden", isOnline());
   openModal(dom.matchOverlay);
 }
 function refreshMatchOverText() {
@@ -1121,17 +1205,11 @@ function recordMatchResult(playerWon) {
   if (playerWon) state.wins += 1;
 }
 
-function advanceAfterRoundResult() {
-  state.roundNumber += 1;
-  dom.roundResultOverlay.classList.add("is-hidden");
-  state.phase = "battle";
-  startRound();
-}
-
 function returnToMenu() {
   state.phase = "menu";
   state.paused = false;
   player = null; cpu = null;
+  const wasOnline = isOnline();
   closeModal(dom.matchOverlay);
   closeModal(dom.settingsOverlay);
   closeModal(dom.helpOverlay);
@@ -1142,8 +1220,9 @@ function returnToMenu() {
   dom.topPanel.classList.remove("is-hidden");
   dom.startBtn.classList.remove("is-hidden");
   dom.iconRow.classList.remove("is-hidden");
+  dom.matchReplay.classList.remove("is-hidden");
   state.menuStep = "main";
-  refreshTopSelection();
+  if (wasOnline) setMode("cpu"); else refreshTopSelection();
 }
 
 /* ============================================================
@@ -1207,8 +1286,10 @@ function startNewMatch() {
 
 function advanceAfterRoundResult() {
   dom.roundResultOverlay.classList.add("is-hidden");
+  if (isOnline() && state.online.role === "guest") return; // host owns round transitions; guest waits for the room update
   state.roundNumber += 1;
   startRound();
+  if (isOnline()) MP.updateRoom({ phase: "launch", roundNumber: state.roundNumber });
 }
 
 /* ============================================================
@@ -1224,10 +1305,12 @@ function canvasPoint(evt) {
 }
 
 function checkBothLaunched() {
-  const ready = isLocal2P() ? (player.launched && cpu.launched) : player.launched;
+  if (isOnline() && state.online.role === "guest") return; // guest's phase mirrors the host's room updates instead
+  const ready = isAnyMultiplayer() ? (player.launched && cpu.launched) : player.launched;
   if (ready) {
     state.phase = "battle";
     showLaunchOverlay(false);
+    if (isOnline()) MP.updateRoom({ phase: "battle" });
   }
 }
 
@@ -1264,7 +1347,11 @@ function endDrag(evt) {
   const dirX = dx / pullLen, dirY = dy / pullLen;
   const power = Math.min(1, pullLen / 160);
   const entity = drag.target === "p1" ? player : cpu;
-  launchEntity(entity, drag.anchorX, drag.anchorY, dirX * BASE_LAUNCH_SPEED, dirY * BASE_LAUNCH_SPEED, power);
+  const vx = dirX * BASE_LAUNCH_SPEED, vy = dirY * BASE_LAUNCH_SPEED;
+  launchEntity(entity, drag.anchorX, drag.anchorY, vx, vy, power);
+  if (isOnline() && state.online.role === "guest") {
+    MP.sendAction("launch", { originX: drag.anchorX, originY: drag.anchorY, dirX: vx, dirY: vy, power });
+  }
   SoundEngine.playLaunch();
   Haptics.impact(0.3);
   checkBothLaunched();
@@ -1285,6 +1372,10 @@ dom.diffRow.querySelectorAll(".pill-btn").forEach((btn) => {
 
 dom.startBtn.addEventListener("click", () => {
   SoundEngine.playUITap();
+  if (isOnline()) {
+    mpConfirmReady();
+    return;
+  }
   if (isLocal2P() && state.menuStep === "main") {
     state.menuStep = "pickPlayer2";
     refreshTopSelection();
@@ -1343,7 +1434,10 @@ dom.roundResultOverlay.addEventListener("click", () => {
   advanceAfterRoundResult();
 });
 
-dom.matchReplay.addEventListener("click", () => { closeModal(dom.matchOverlay); startNewMatch(); });
+dom.matchReplay.addEventListener("click", () => {
+  closeModal(dom.matchOverlay);
+  if (isOnline()) returnToMenu(); else startNewMatch();
+});
 dom.matchClose.addEventListener("click", () => { closeModal(dom.matchOverlay); returnToMenu(); });
 
 dom.gameCard.addEventListener("pointermove", (evt) => {
@@ -1358,6 +1452,271 @@ function startIntroSequence() {
   introTimer = setTimeout(dismiss, 3200);
   dom.introPlay.addEventListener("click", dismiss, { once: true });
 }
+
+/* ============================================================
+   Online multiplayer — glue between the game engine above and
+   window.MP (beyblade-multiplayer.js). One player ("host") runs the
+   authoritative simulation and streams state; the other ("guest") renders
+   what it receives and sends its own launch/special taps as actions for
+   the host to apply. See beyblade-multiplayer.js for why (continuous
+   physics with per-frame randomness can't be synced like a turn list).
+   ============================================================ */
+
+function mpResetLobbyUI() {
+  dom.lobbyIdle.classList.remove("is-hidden");
+  dom.lobbyWaiting.classList.add("is-hidden");
+  dom.lobbyMatched.classList.add("is-hidden");
+  dom.lobbyJoinRow.classList.add("is-hidden");
+  dom.lobbyCodeInput.value = "";
+  dom.lobbyIdleStatus.textContent = "";
+  dom.lobbyIdleStatus.classList.remove("is-error");
+}
+
+function mpShowWaiting(code) {
+  dom.lobbyIdle.classList.add("is-hidden");
+  dom.lobbyMatched.classList.add("is-hidden");
+  dom.lobbyWaiting.classList.remove("is-hidden");
+  dom.lobbyCodeDisplay.textContent = code;
+}
+
+function mpShowMatched() {
+  dom.lobbyIdle.classList.add("is-hidden");
+  dom.lobbyWaiting.classList.add("is-hidden");
+  dom.lobbyMatched.classList.remove("is-hidden");
+  dom.lobbyMatchedStatus.textContent = t("opponentJoined");
+  dom.topPanel.classList.remove("is-hidden");
+  dom.startBtn.classList.remove("is-hidden");
+  dom.startBtn.textContent = t("readyBtn");
+  refreshTopSelection();
+}
+
+function mpErrorMessage(err) {
+  const msg = err && err.message;
+  if (msg === "not-configured") return t("onlineNotConfigured");
+  if (msg === "room-not-found") return t("roomNotFound");
+  if (msg === "room-full") return t("roomFull");
+  if (msg === "room-finished") return t("roomFinished");
+  if (msg === "lobby-full") return t("lobbyFull");
+  return t("onlineNotConfigured");
+}
+
+function mpShowIdleError(err) {
+  dom.lobbyIdleStatus.textContent = mpErrorMessage(err);
+  dom.lobbyIdleStatus.classList.add("is-error");
+}
+
+function mpLeaveIfActive() {
+  if (state.online.active && window.MP) MP.leaveRoom();
+  state.online.active = false;
+  state.online.role = null;
+  state.online.code = null;
+  state.online.matched = false;
+  state.online.myReady = false;
+  state.online.oppReady = false;
+  state.online.oppOnline = false;
+  state.online.lastRoundWinnerIsHost = null;
+}
+
+async function mpConfirmReady() {
+  if (state.online.myReady) return;
+  state.online.myReady = true;
+  dom.topPanel.classList.add("is-hidden");
+  dom.startBtn.classList.add("is-hidden");
+  dom.lobbyMatchedStatus.textContent = t("waitingForOpponentPick");
+  const field = state.online.role === "host"
+    ? { hostTopIndex: state.playerPresetIndex }
+    : { guestTopIndex: state.playerPresetIndex };
+  try {
+    await MP.updateRoom(field);
+  } catch (err) {
+    state.online.myReady = false;
+    dom.topPanel.classList.remove("is-hidden");
+    dom.startBtn.classList.remove("is-hidden");
+  }
+}
+
+/** First-round setup: creates local entities from the room's confirmed top picks and starts the
+ * round. Called by both sides once `room.phase` becomes "launch" for the first time. */
+function mpBeginOnlineBattle(room) {
+  const myTopIndex = state.online.role === "host" ? room.hostTopIndex : room.guestTopIndex;
+  const oppTopIndex = state.online.role === "host" ? room.guestTopIndex : room.hostTopIndex;
+  player = makeEntity(TOPS[myTopIndex], true);
+  cpu = makeEntity(TOPS[oppTopIndex], false);
+  state.playerWins = state.online.role === "host" ? (room.hostWins || 0) : (room.guestWins || 0);
+  state.cpuWins = state.online.role === "host" ? (room.guestWins || 0) : (room.hostWins || 0);
+  state.roundNumber = room.roundNumber || 1;
+  startRound();
+  if (state.online.role === "host") MP.updateRoom({ phase: "launch" });
+}
+
+/** Subsequent-round reset for the guest — the host already ran this via startRound(). */
+function mpResetRoundLocal() {
+  state.phase = "launch";
+  state.paused = false;
+  state.sparks = [];
+  state.bursts = [];
+  dom.suddenDeathLabel.classList.add("is-hidden");
+  player.launched = false; player.alive = true; player.koAnim = null;
+  cpu.launched = false; cpu.alive = true; cpu.koAnim = null;
+  dom.roundResultOverlay.classList.add("is-hidden");
+  showLaunchOverlay(true);
+}
+
+function mpHandleRoomUpdate(room) {
+  if (!state.online.active) return;
+
+  if (state.online.role === "host" && room.phase === "picking" && room.hostTopIndex != null && room.guestTopIndex != null) {
+    mpBeginOnlineBattle(room);
+    return;
+  }
+
+  if (room.phase === "launch" && !player) {
+    mpBeginOnlineBattle(room);
+  } else if (room.phase === "launch" && state.phase !== "launch" && state.phase !== "battle") {
+    if (state.online.role === "guest") {
+      state.roundNumber = room.roundNumber || state.roundNumber;
+      mpResetRoundLocal();
+    }
+  }
+
+  if (room.phase === "battle" && state.phase !== "battle" && state.online.role === "guest") {
+    state.phase = "battle";
+    showLaunchOverlay(false);
+  }
+
+  if (state.online.role === "guest" && player && cpu) {
+    if (room.phase === "roundResult" && state.phase !== "roundResult") {
+      state.phase = "roundResult";
+      state.playerWins = room.guestWins || 0;
+      state.cpuWins = room.hostWins || 0;
+      const winnerIsPlayer = room.lastRoundWinner === "guest";
+      showRoundResultOverlay(winnerIsPlayer ? player : cpu);
+    }
+    if (room.phase === "matchOver" && state.phase !== "matchOver") {
+      state.phase = "matchOver";
+      state.playerWins = room.guestWins || 0;
+      state.cpuWins = room.hostWins || 0;
+      showMatchOverOverlay();
+    }
+  }
+}
+
+function mpApplySnapshotToEntity(e, snapshot, prefix) {
+  const wasAlive = e.alive;
+  e.x = snapshot[prefix + "X"] || 0;
+  e.y = snapshot[prefix + "Y"] || 0;
+  e.vx = snapshot[prefix + "Vx"] || 0;
+  e.vy = snapshot[prefix + "Vy"] || 0;
+  e.spinAngle = snapshot[prefix + "SpinAngle"] || 0;
+  e.stamina = snapshot[prefix + "Stamina"] || 0;
+  e.specialGauge = snapshot[prefix + "SpecialGauge"] || 0;
+  e.launched = !!snapshot[prefix + "Launched"];
+  e.alive = !!snapshot[prefix + "Alive"];
+  const koReason = snapshot[prefix + "KoReason"] || null;
+  if (wasAlive && !e.alive && koReason && !e.koAnim) {
+    e.koReason = koReason;
+    playKOAnimation(e, koReason);
+  }
+}
+
+function mpApplyRemoteState(snapshot) {
+  if (!player || !cpu) return;
+  mpApplySnapshotToEntity(player, snapshot, "guest");
+  mpApplySnapshotToEntity(cpu, snapshot, "host");
+  if (snapshot.suddenDeathActive && !state.suddenDeathActive) showSuddenDeathBanner();
+  state.suddenDeathActive = !!snapshot.suddenDeathActive;
+  state.battleElapsed = snapshot.battleElapsed || 0;
+}
+
+function mpApplyRemoteAction(action) {
+  if (!player || !cpu) return;
+  if (action.type === "launch") {
+    if (cpu.launched) return;
+    launchEntity(cpu, action.originX, action.originY, action.dirX, action.dirY, action.power);
+    SoundEngine.playLaunch();
+    checkBothLaunched();
+  } else if (action.type === "special") {
+    fireSpecialMove(cpu);
+  }
+}
+
+function mpPushHostState() {
+  if (!player || !cpu) return;
+  MP.pushState({
+    hostX: player.x, hostY: player.y, hostVx: player.vx, hostVy: player.vy,
+    hostSpinAngle: player.spinAngle, hostStamina: player.stamina, hostSpecialGauge: player.specialGauge,
+    hostAlive: player.alive, hostLaunched: player.launched, hostKoReason: player.koReason,
+    guestX: cpu.x, guestY: cpu.y, guestVx: cpu.vx, guestVy: cpu.vy,
+    guestSpinAngle: cpu.spinAngle, guestStamina: cpu.stamina, guestSpecialGauge: cpu.specialGauge,
+    guestAlive: cpu.alive, guestLaunched: cpu.launched, guestKoReason: cpu.koReason,
+    battleElapsed: state.battleElapsed, suddenDeathActive: state.suddenDeathActive,
+  });
+}
+
+function mpWireCallbacks() {
+  if (!window.MP) return;
+  MP.onOpponentJoined = () => { state.online.matched = true; mpShowMatched(); };
+  MP.onRoomUpdate = mpHandleRoomUpdate;
+  MP.onRemoteState = mpApplyRemoteState;
+  MP.onRemoteAction = mpApplyRemoteAction;
+  MP.onOpponentPresence = (online) => { state.online.oppOnline = online; };
+  MP.onError = (err) => { console.warn("Multiplayer error:", err); };
+}
+if (window.MP) mpWireCallbacks(); else window.addEventListener("mp-ready", mpWireCallbacks, { once: true });
+
+dom.lobbyCreateBtn.addEventListener("click", async () => {
+  SoundEngine.playUITap();
+  if (!window.MP) { mpShowIdleError({ message: "not-configured" }); return; }
+  dom.lobbyIdleStatus.textContent = "";
+  dom.lobbyIdleStatus.classList.remove("is-error");
+  try {
+    const res = await MP.createRoom();
+    state.online.active = true; state.online.role = res.role; state.online.code = res.code;
+    mpShowWaiting(res.code);
+  } catch (err) { mpShowIdleError(err); }
+});
+
+dom.lobbyJoinBtn.addEventListener("click", () => {
+  SoundEngine.playUITap();
+  dom.lobbyJoinRow.classList.toggle("is-hidden");
+  dom.lobbyCodeInput.focus();
+});
+
+dom.lobbyJoinConfirmBtn.addEventListener("click", async () => {
+  SoundEngine.playUITap();
+  if (!window.MP) { mpShowIdleError({ message: "not-configured" }); return; }
+  const code = dom.lobbyCodeInput.value.trim().toUpperCase();
+  if (!code) return;
+  dom.lobbyIdleStatus.textContent = "";
+  dom.lobbyIdleStatus.classList.remove("is-error");
+  try {
+    const res = await MP.joinRoom(code);
+    state.online.active = true; state.online.role = res.role; state.online.code = res.code;
+    state.online.matched = true;
+    mpShowMatched();
+  } catch (err) { mpShowIdleError(err); }
+});
+dom.lobbyCodeInput.addEventListener("keydown", (evt) => {
+  if (evt.key === "Enter") dom.lobbyJoinConfirmBtn.click();
+});
+
+dom.lobbyQuickBtn.addEventListener("click", async () => {
+  SoundEngine.playUITap();
+  if (!window.MP) { mpShowIdleError({ message: "not-configured" }); return; }
+  dom.lobbyIdleStatus.textContent = "";
+  dom.lobbyIdleStatus.classList.remove("is-error");
+  try {
+    const res = await MP.quickPlay();
+    state.online.active = true; state.online.role = res.role; state.online.code = res.code;
+    if (res.role === "host") { mpShowWaiting(res.code); } else { state.online.matched = true; mpShowMatched(); }
+  } catch (err) { mpShowIdleError(err); }
+});
+
+dom.lobbyCancelBtn.addEventListener("click", () => {
+  SoundEngine.playUITap();
+  mpLeaveIfActive();
+  mpResetLobbyUI();
+});
 
 /* ============================================================
    Main loop

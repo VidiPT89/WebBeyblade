@@ -50,11 +50,37 @@
       <div class="pill-row" id="mode-row">
         <button class="pill-btn is-active" data-mode="cpu" type="button" data-i18n="modeVsCPU">vs CPU</button>
         <button class="pill-btn" data-mode="player" type="button" data-i18n="modeVsPlayer">vs Player</button>
+        <button class="pill-btn" data-mode="online" type="button" data-i18n="modeOnline">Online</button>
       </div>
       <div class="pill-row" id="diff-row">
         <button class="pill-btn" data-diff="easy" type="button" data-i18n="diffEasy">Easy</button>
         <button class="pill-btn is-active" data-diff="normal" type="button" data-i18n="diffNormal">Normal</button>
         <button class="pill-btn" data-diff="hard" type="button" data-i18n="diffHard">Hard</button>
+      </div>
+    </section>
+
+    <section class="setup-panel is-hidden" id="lobby-panel">
+      <p class="panel-label" data-i18n="onlinePlay">ONLINE PLAY</p>
+      <div class="lobby-idle" id="lobby-idle">
+        <div class="pill-row">
+          <button class="pill-btn" id="lobby-create-btn" type="button" data-i18n="createRoomBtn">Create Room</button>
+          <button class="pill-btn" id="lobby-join-btn" type="button" data-i18n="joinRoomBtn">Join Room</button>
+          <button class="pill-btn" id="lobby-quick-btn" type="button" data-i18n="quickPlayBtn">Quick Play</button>
+        </div>
+        <div class="lobby-join-row is-hidden" id="lobby-join-row">
+          <input class="lobby-code-input" id="lobby-code-input" type="text" maxlength="6" data-i18n-placeholder="roomCodePlaceholder" placeholder="CODE" />
+          <button class="pill-btn" id="lobby-join-confirm-btn" type="button" data-i18n="joinBtn">Join</button>
+        </div>
+        <p class="lobby-status" id="lobby-idle-status"></p>
+      </div>
+      <div class="lobby-waiting is-hidden" id="lobby-waiting">
+        <p class="lobby-code-label" data-i18n="roomCodeLabel">ROOM CODE</p>
+        <p class="lobby-code" id="lobby-code-display">------</p>
+        <p class="lobby-status" data-i18n="waitingForOpponent">Waiting for opponent…</p>
+        <button class="pill-btn" id="lobby-cancel-btn" type="button" data-i18n="cancelBtn">Cancel</button>
+      </div>
+      <div class="lobby-matched is-hidden" id="lobby-matched">
+        <p class="lobby-status" id="lobby-matched-status" data-i18n="opponentJoined">Opponent joined! Pick your top below.</p>
       </div>
     </section>
 
@@ -218,6 +244,8 @@
   </div>
 </div>
 
+<script src="firebase-config.js"></script>
+<script type="module" src="beyblade-multiplayer.js"></script>
 <script src="script.js"></script>
 </body>
 </html>
