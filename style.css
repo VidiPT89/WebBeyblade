@@ -181,6 +181,7 @@ html, body {
   border-color: var(--blue-bright);
 }
 .pill-btn.is-hidden { display: none; }
+.pill-btn.is-disabled { opacity: 0.4; cursor: default; pointer-events: none; }
 
 .top-grid {
   display: grid;

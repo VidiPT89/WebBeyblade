@@ -55,6 +55,7 @@ const TRANSLATIONS = {
     waitingForYourPick: "Waiting for you to pick a top…",
     waitingForOpponentPick: "Waiting for opponent to pick a top…",
     onlineNotConfigured: "Online play isn't set up yet.",
+    onlineLoading: "Connecting…",
     roomNotFound: "That room code wasn't found.",
     roomFull: "That room is already full.",
     roomFinished: "That match already ended.",
@@ -113,6 +114,7 @@ const TRANSLATIONS = {
     waitingForYourPick: "A aguardar que escolhas um pião…",
     waitingForOpponentPick: "A aguardar que o adversário escolha um pião…",
     onlineNotConfigured: "O modo online ainda não está configurado.",
+    onlineLoading: "A ligar…",
     roomNotFound: "Esse código de sala não foi encontrado.",
     roomFull: "Essa sala já está cheia.",
     roomFinished: "Esse combate já terminou.",
@@ -1468,8 +1470,18 @@ function mpResetLobbyUI() {
   dom.lobbyMatched.classList.add("is-hidden");
   dom.lobbyJoinRow.classList.add("is-hidden");
   dom.lobbyCodeInput.value = "";
-  dom.lobbyIdleStatus.textContent = "";
   dom.lobbyIdleStatus.classList.remove("is-error");
+  mpSetLobbyButtonsEnabled(mpReady);
+  dom.lobbyIdleStatus.textContent = mpReady ? "" : t("onlineLoading");
+}
+
+let mpReady = false;
+
+function mpSetLobbyButtonsEnabled(enabled) {
+  [dom.lobbyCreateBtn, dom.lobbyJoinBtn, dom.lobbyQuickBtn, dom.lobbyJoinConfirmBtn].forEach((btn) => {
+    btn.disabled = !enabled;
+    btn.classList.toggle("is-disabled", !enabled);
+  });
 }
 
 function mpShowWaiting(code) {
@@ -1661,6 +1673,11 @@ function mpWireCallbacks() {
   MP.onRemoteAction = mpApplyRemoteAction;
   MP.onOpponentPresence = (online) => { state.online.oppOnline = online; };
   MP.onError = (err) => { console.warn("Multiplayer error:", err); };
+  mpReady = true;
+  if (isOnline() && !state.online.active) {
+    mpSetLobbyButtonsEnabled(true);
+    if (dom.lobbyIdleStatus.textContent === t("onlineLoading")) dom.lobbyIdleStatus.textContent = "";
+  }
 }
 if (window.MP) mpWireCallbacks(); else window.addEventListener("mp-ready", mpWireCallbacks, { once: true });
 
