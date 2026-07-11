@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>iBeyblade — Launch, Spin, Battle</title>
+<meta name="description" content="A native-feeling spinning-top battle game for the browser. Eight tops with guardian spirits, a real sloped stadium bowl, Special Moves, local 2-player battles — built in HTML, CSS and JavaScript." />
+<meta property="og:title" content="iBeyblade" />
+<meta property="og:description" content="Launch, spin, battle — a spinning-top arena game for the browser." />
+<meta property="og:type" content="website" />
+<meta name="theme-color" content="#05060f" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%80%3C/text%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Sora:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-icon">🌀</span>
+      <span class="brand-name">iBeyblade</span>
+    </div>
+    <div class="topbar-actions">
+      <button id="sound-toggle" class="icon-btn" type="button" aria-label="Sound" title="Sound">
+        <span id="sound-icon">🔊</span>
+      </button>
+      <button id="lang-toggle" class="lang-btn" type="button" aria-label="Switch language">
+        <span id="lang-label">EN</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <section class="hero">
+      <p class="eyebrow" data-i18n="eyebrow">SPINNING TOP ARENA</p>
+      <h1 class="title">
+        <span class="title-line accent" data-i18n="title1">Launch. Spin.</span>
+        <span class="title-line" data-i18n="title2">Battle.</span>
+      </h1>
+      <p class="tagline" data-i18n="tagline">Pick your top, pull back to launch it into a glowing arena, and outlast your rival's spin.</p>
+    </section>
+
+    <section class="setup-panel" id="mode-panel">
+      <p class="panel-label" data-i18n="chooseMode">MODE</p>
+      <div class="pill-row" id="mode-row">
+        <button class="pill-btn is-active" data-mode="cpu" type="button" data-i18n="modeVsCPU">vs CPU</button>
+        <button class="pill-btn" data-mode="player" type="button" data-i18n="modeVsPlayer">vs Player</button>
+      </div>
+      <div class="pill-row" id="diff-row">
+        <button class="pill-btn" data-diff="easy" type="button" data-i18n="diffEasy">Easy</button>
+        <button class="pill-btn is-active" data-diff="normal" type="button" data-i18n="diffNormal">Normal</button>
+        <button class="pill-btn" data-diff="hard" type="button" data-i18n="diffHard">Hard</button>
+      </div>
+    </section>
+
+    <section class="setup-panel" id="top-panel">
+      <p class="panel-label" id="top-panel-label" data-i18n="chooseTop">CHOOSE YOUR TOP</p>
+      <div class="top-grid" id="top-grid"></div>
+    </section>
+
+    <button class="start-btn" id="start-btn" type="button" data-i18n="pressStart">TAP TO START</button>
+
+    <div class="icon-row">
+      <button class="round-icon-btn" id="settings-btn" type="button" aria-label="Settings" title="Settings">⚙</button>
+      <button class="round-icon-btn" id="tutorial-btn" type="button" aria-label="Tutorial" title="Tutorial">🎓</button>
+      <button class="round-icon-btn" id="help-btn" type="button" aria-label="Help" title="Help">?</button>
+    </div>
+
+    <section class="game-card is-hidden" id="game-card">
+      <div class="game-card-glow"></div>
+
+      <div class="battle-hud" id="battle-hud">
+        <div class="hud-side">
+          <span class="hud-name" id="p1-name">—</span>
+          <div class="stat-bar"><span class="stat-bar-fill blue" id="p1-bar"></span></div>
+        </div>
+        <div class="hud-mid">
+          <span class="round-label" id="round-label">Round 1 — 0:0</span>
+          <span class="sudden-death-label is-hidden" id="sudden-death-label" data-i18n="suddenDeath">SUDDEN DEATH</span>
+        </div>
+        <div class="hud-side right">
+          <span class="hud-name" id="p2-name">—</span>
+          <div class="stat-bar"><span class="stat-bar-fill red" id="p2-bar"></span></div>
+        </div>
+      </div>
+
+      <div class="screen-frame">
+        <canvas id="game-canvas" width="600" height="600"></canvas>
+        <div class="scanlines" aria-hidden="true"></div>
+
+        <div class="overlay-layer is-hidden" id="launch-overlay">
+          <p class="overlay-sub" id="pull-hint" data-i18n="pullHint">Drag back from your top and release to launch</p>
+          <p class="overlay-sub" id="pull-hint2" data-i18n="pullHint">Drag back from your top and release to launch</p>
+        </div>
+        <div class="overlay-layer is-hidden" id="pause-overlay">
+          <p class="overlay-title" data-i18n="pausedTitle">PAUSED</p>
+          <p class="overlay-sub" data-i18n="pausedSub">Tap to resume</p>
+          <button class="ghost-btn" id="pause-menu-btn" type="button" data-i18n="menuBtn">Menu</button>
+        </div>
+        <div class="overlay-layer is-hidden" id="round-result-overlay">
+          <p class="overlay-title" id="round-result-title"></p>
+          <p class="overlay-sub" id="round-result-sub" data-i18n="tapToContinue">Tap to continue</p>
+        </div>
+
+        <div class="toast" id="special-toast"></div>
+
+        <button class="special-btn" id="p1-special" type="button">
+          <span class="special-label">SP</span>
+          <small class="special-pct" id="p1-special-pct">0%</small>
+        </button>
+        <button class="special-btn top is-hidden" id="p2-special" type="button">
+          <span class="special-label">SP</span>
+          <small class="special-pct" id="p2-special-pct">0%</small>
+        </button>
+
+        <button class="hud-icon-btn home" id="home-btn" type="button" title="Menu">⌂</button>
+        <button class="hud-icon-btn pause" id="pause-btn" type="button" title="Pause">❚❚</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>
+      <span data-i18n="footerBy">Developed by</span>
+      <strong>David Arsénio Martins</strong>
+    </p>
+    <div class="footer-links">
+      <a href="https://ividi.dev/" target="_blank" rel="noopener noreferrer">ividi.dev</a>
+      <span class="dot">·</span>
+      <a href="https://github.com/VidiPT89/WebBeyblade" target="_blank" rel="noopener noreferrer">GitHub</a>
+    </div>
+  </footer>
+</div>
+
+<div class="modal-overlay is-open" id="intro-overlay">
+  <div class="modal intro-modal">
+    <span class="modal-icon">🌀</span>
+    <h2 class="modal-title" data-i18n="title">iBeyblade</h2>
+    <p class="modal-text" data-i18n="tagline">Pick your top, pull back to launch it into a glowing arena, and outlast your rival's spin.</p>
+    <div class="intro-credit">
+      <p class="intro-credit-line">
+        <span data-i18n="footerBy">Developed by</span> <strong>David Arsénio Martins</strong>
+      </p>
+      <div class="intro-links">
+        <a href="https://ividi.dev/" target="_blank" rel="noopener noreferrer">ividi.dev</a>
+        <span class="dot">·</span>
+        <a href="https://github.com/VidiPT89/WebBeyblade" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </div>
+    </div>
+    <button class="ghost-btn intro-skip" id="intro-play" type="button" data-i18n="introSkipBtn">Skip</button>
+    <div class="intro-progress"><span class="intro-progress-fill" id="intro-progress-fill"></span></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="match-overlay">
+  <div class="modal">
+    <span class="modal-icon" id="match-icon">🏆</span>
+    <h2 class="modal-title" id="match-title">—</h2>
+    <p class="modal-text" id="match-sub">0 : 0</p>
+    <div class="modal-actions">
+      <button class="primary-btn" id="match-replay" type="button" data-i18n="playAgainBtn">Play Again</button>
+      <button class="ghost-btn" id="match-close" type="button" data-i18n="menuBtn">Menu</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="settings-overlay">
+  <div class="modal">
+    <h2 class="modal-title" data-i18n="settingsTitle">SETTINGS</h2>
+    <div class="settings-rows">
+      <div class="settings-row">
+        <span data-i18n="soundLabel">Sound</span>
+        <button class="pill-toggle" id="settings-sound" type="button">ON</button>
+      </div>
+      <div class="settings-row">
+        <span data-i18n="hapticsLabel">Haptics</span>
+        <button class="pill-toggle" id="settings-haptics" type="button">ON</button>
+      </div>
+      <div class="settings-row">
+        <span data-i18n="languageLabel">Language</span>
+        <button class="pill-toggle" id="settings-lang" type="button">EN</button>
+      </div>
+      <div class="settings-row">
+        <span data-i18n="winsLabel">Wins</span>
+        <span id="settings-wins">0</span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost-btn" id="settings-close" type="button" data-i18n="closeBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="help-overlay">
+  <div class="modal">
+    <h2 class="modal-title" data-i18n="helpTitle">HELP</h2>
+    <p class="modal-text help-text" id="help-body" data-i18n="helpBody"></p>
+    <div class="modal-actions">
+      <button class="ghost-btn" id="help-close" type="button" data-i18n="closeBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="tutorial-overlay">
+  <div class="modal">
+    <h2 class="modal-title" id="tutorial-title">—</h2>
+    <p class="modal-text" id="tutorial-body">—</p>
+    <div class="tutorial-dots" id="tutorial-dots"></div>
+    <div class="modal-actions column">
+      <button class="primary-btn" id="tutorial-next" type="button" data-i18n="tutorialNext">Next</button>
+      <button class="ghost-btn" id="tutorial-skip" type="button" data-i18n="tutorialSkip">Skip</button>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
