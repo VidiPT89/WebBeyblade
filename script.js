@@ -502,7 +502,11 @@ function resolveTopCollision() {
 }
 
 function triggerKO(e, reason) {
-  if (!e.alive) return;
+  // A single hard collision can knock both tops to zero stamina in the same
+  // frame. Once a round-ending KO is already scheduled, ignore a second
+  // simultaneous KO instead of marking both entities dead — otherwise
+  // neither `alive` flag survives and concludeRound() can't tell who won.
+  if (!e.alive || state.pendingRoundEnd !== null) return;
   e.alive = false;
   e.koReason = reason;
   playKOAnimation(e, reason);
