@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   --bg: #05060f;
   --bg-card: #0a0c1c;
   --bg-panel: rgba(255, 255, 255, 0.035);
@@ -202,12 +203,12 @@ html, body {
   border-width: 3px;
 }
 
-.top-card-name { font-weight: 800; font-size: 1rem; margin: 0 0 2px; }
+.top-card-name { color: var(--fg); font-weight: 800; font-size: 1rem; margin: 0 0 2px; }
 .top-card-type { font-size: 0.82rem; color: var(--card-color); margin: 0 0 10px; font-weight: 700; }
 .top-card-stats { display: flex; flex-direction: column; gap: 5px; }
 .top-stat-row { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 0.68rem; color: var(--muted); }
 .top-stat-row .bar-track { flex: 1; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.1); overflow: hidden; }
-.top-stat-row .bar-fill { height: 100%; border-radius: 3px; }
+.top-stat-row .bar-fill { display: block; height: 100%; border-radius: 3px; }
 .top-stat-row .bar-fill.atk { background: #ff5a3c; }
 .top-stat-row .bar-fill.def { background: #3ca0ff; }
 .top-stat-row .bar-fill.stm { background: #3cffb0; }
