@@ -135,31 +135,39 @@ function startPresenceHeartbeat() {
 
 function markOffline() { sendHeartbeat(false); }
 
-async function enterRoom(code, data) {
+/** Claims/enters a room. `myTopIndex` is only written when actually claiming an open room as
+ * guest — reconnecting to a room I already belong to never overwrites a pick I already made. The
+ * returned `data` always reflects the final, merged room doc so the caller can start the battle
+ * immediately without waiting on a listener round-trip. */
+async function enterRoom(code, data, myTopIndex) {
   const myUid = state.myUid;
+  let finalData = data;
   if (data.hostUid === myUid) {
     state.role = "host";
   } else if (data.guestUid === myUid) {
     state.role = "guest";
   } else if (!data.guestUid) {
     if (data.status === "finished") throw new Error("room-finished");
+    const guestFields = {
+      guestUid: myUid,
+      status: "active",
+      guestTopIndex: myTopIndex,
+      guestPresence: { online: true, lastSeen: serverTimestamp() },
+      updatedAt: serverTimestamp(),
+    };
     try {
-      await updateDoc(doc(db, "beyblade_rooms", code), {
-        guestUid: myUid,
-        status: "active",
-        guestPresence: { online: true, lastSeen: serverTimestamp() },
-        updatedAt: serverTimestamp(),
-      });
+      await updateDoc(doc(db, "beyblade_rooms", code), guestFields);
     } catch (err) {
       throw new Error("room-full");
     }
     state.role = "guest";
+    finalData = { ...data, ...guestFields };
   } else {
     throw new Error("room-full");
   }
 
   state.roomCode = code;
-  state.sawGuest = !!data.guestUid || state.role === "guest";
+  state.sawGuest = !!finalData.guestUid || state.role === "guest";
   state.opponentOnline = false;
   state.lastOppPresence = null;
   state.appliedActionIds = new Set();
@@ -167,16 +175,18 @@ async function enterRoom(code, data) {
   attachStateListener();
   attachActionsListener();
   startPresenceHeartbeat();
-  return { code, role: state.role };
+  return { code, role: state.role, data: finalData };
 }
 
-function freshRoomDoc(hostUid) {
+/** The host's top is submitted immediately, atomically with the room — the host never sees a
+ * separate "pick your top" step, only a waiting screen with the room code. */
+function freshRoomDoc(hostUid, hostTopIndex) {
   return {
     hostUid,
     guestUid: null,
     status: "waiting",
     phase: "picking",
-    hostTopIndex: null,
+    hostTopIndex,
     guestTopIndex: null,
     hostWins: 0,
     guestWins: 0,
@@ -190,16 +200,16 @@ function freshRoomDoc(hostUid) {
   };
 }
 
-export async function joinRoom(code) {
+export async function joinRoom(code, topIndex) {
   await ensureSignedIn();
   state.myUid = auth.currentUser.uid;
   const ref = doc(db, "beyblade_rooms", code);
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new Error("room-not-found");
-  return enterRoom(code, snap.data());
+  return enterRoom(code, snap.data(), topIndex);
 }
 
-export async function createRoom() {
+export async function createRoom(topIndex) {
   await ensureSignedIn();
   const myUid = auth.currentUser.uid;
   state.myUid = myUid;
@@ -208,19 +218,20 @@ export async function createRoom() {
     const ref = doc(db, "beyblade_rooms", code);
     const existing = await getDoc(ref);
     if (existing.exists()) continue;
+    const roomDoc = freshRoomDoc(myUid, topIndex);
     try {
-      await setDoc(ref, freshRoomDoc(myUid));
+      await setDoc(ref, roomDoc);
     } catch (err) {
       continue;
     }
-    return joinRoom(code);
+    return enterRoom(code, roomDoc, topIndex);
   }
   throw new Error("room-create-failed");
 }
 
 /** Joins (or claims/recycles) the first available room in the fixed public lobby pool, so two
  * people can play without coordinating a code. */
-export async function quickPlay() {
+export async function quickPlay(topIndex) {
   if (!configured) throw new Error("not-configured");
   await ensureSignedIn();
   const myUid = auth.currentUser.uid;
@@ -231,25 +242,31 @@ export async function quickPlay() {
     const data = snap && snap.exists() ? snap.data() : null;
 
     if (!data || data.status === "finished") {
+      const roomDoc = freshRoomDoc(myUid, topIndex);
       try {
-        await setDoc(ref, freshRoomDoc(myUid));
+        await setDoc(ref, roomDoc);
       } catch (err) {
         continue; // someone else claimed/recycled this slot first — try the next one
       }
-      return enterRoom(code, freshRoomDoc(myUid));
+      return enterRoom(code, roomDoc, topIndex);
     }
     if (data.hostUid === myUid || data.guestUid === myUid) {
-      return enterRoom(code, data); // reconnecting to my own quick-play game
+      return enterRoom(code, data, topIndex); // reconnecting to my own quick-play game
     }
     if (data.status === "waiting" && !data.guestUid) {
-      return enterRoom(code, data); // joins as guest, starts immediately
+      try {
+        return await enterRoom(code, data, topIndex); // joins as guest, starts immediately
+      } catch (err) {
+        continue;
+      }
     }
+    const roomDoc = freshRoomDoc(myUid, topIndex);
     try {
-      await setDoc(ref, freshRoomDoc(myUid));
-      return enterRoom(code, freshRoomDoc(myUid));
+      await setDoc(ref, roomDoc);
     } catch (err) {
       continue; // still genuinely occupied — try the next pool slot
     }
+    return enterRoom(code, roomDoc, topIndex);
   }
   throw new Error("lobby-full");
 }

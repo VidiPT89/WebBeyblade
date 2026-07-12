@@ -51,9 +51,6 @@ const TRANSLATIONS = {
     createRoomBtn: "Create Room", joinRoomBtn: "Join Room", quickPlayBtn: "Quick Play",
     roomCodePlaceholder: "CODE", joinBtn: "Join", cancelBtn: "Cancel",
     roomCodeLabel: "ROOM CODE", waitingForOpponent: "Waiting for opponent…",
-    opponentJoined: "Opponent joined! Pick your top below.",
-    waitingForYourPick: "Waiting for you to pick a top…",
-    waitingForOpponentPick: "Waiting for opponent to pick a top…",
     onlineNotConfigured: "Online play isn't set up yet.",
     onlineLoading: "Connecting…",
     roomNotFound: "That room code wasn't found.",
@@ -63,7 +60,6 @@ const TRANSLATIONS = {
     opponentDisconnected: "Opponent disconnected.",
     p1WinsOnline: "YOU WON THE ROUND", p2WinsOnline: "OPPONENT WON THE ROUND",
     onlineMatchWin: "VICTORY!", onlineMatchLose: "DEFEAT",
-    readyBtn: "READY",
   },
   pt: {
     eyebrow: "ARENA DE PIÕES",
@@ -110,9 +106,6 @@ const TRANSLATIONS = {
     createRoomBtn: "Criar Sala", joinRoomBtn: "Entrar em Sala", quickPlayBtn: "Jogo Rápido",
     roomCodePlaceholder: "CÓDIGO", joinBtn: "Entrar", cancelBtn: "Cancelar",
     roomCodeLabel: "CÓDIGO DA SALA", waitingForOpponent: "A aguardar adversário…",
-    opponentJoined: "Adversário entrou! Escolhe o teu pião abaixo.",
-    waitingForYourPick: "A aguardar que escolhas um pião…",
-    waitingForOpponentPick: "A aguardar que o adversário escolha um pião…",
     onlineNotConfigured: "O modo online ainda não está configurado.",
     onlineLoading: "A ligar…",
     roomNotFound: "Esse código de sala não foi encontrado.",
@@ -122,7 +115,6 @@ const TRANSLATIONS = {
     opponentDisconnected: "O adversário desligou-se.",
     p1WinsOnline: "VENCESTE A RONDA", p2WinsOnline: "O ADVERSÁRIO VENCEU A RONDA",
     onlineMatchWin: "VITÓRIA!", onlineMatchLose: "DERROTA",
-    readyBtn: "PRONTO",
   },
 };
 
@@ -212,7 +204,6 @@ const dom = {
   lobbyCreateBtn: $("lobby-create-btn"), lobbyJoinBtn: $("lobby-join-btn"), lobbyQuickBtn: $("lobby-quick-btn"),
   lobbyJoinRow: $("lobby-join-row"), lobbyCodeInput: $("lobby-code-input"), lobbyJoinConfirmBtn: $("lobby-join-confirm-btn"),
   lobbyWaiting: $("lobby-waiting"), lobbyCodeDisplay: $("lobby-code-display"), lobbyCancelBtn: $("lobby-cancel-btn"),
-  lobbyMatched: $("lobby-matched"), lobbyMatchedStatus: $("lobby-matched-status"),
 };
 
 /* ============================================================
@@ -251,8 +242,6 @@ const state = {
     active: false, // true once a room is joined/created
     role: null, // "host" | "guest"
     code: null,
-    matched: false, // opponent has joined the room
-    myReady: false, oppReady: false,
     oppOnline: false,
     lastRoundWinnerIsHost: null,
   },
@@ -1061,8 +1050,8 @@ function setMode(mode) {
   if (mode === "online") {
     mpResetLobbyUI();
     dom.lobbyPanel.classList.remove("is-hidden");
-    dom.topPanel.classList.add("is-hidden");
-    dom.startBtn.classList.add("is-hidden");
+    dom.topPanel.classList.remove("is-hidden"); // pick a top up front, alongside Create/Join/Quick Play
+    dom.startBtn.classList.add("is-hidden"); // Create/Join/Quick Play themselves are the commit action
   } else {
     if (wasOnline) mpLeaveIfActive();
     dom.lobbyPanel.classList.add("is-hidden");
@@ -1374,10 +1363,6 @@ dom.diffRow.querySelectorAll(".pill-btn").forEach((btn) => {
 
 dom.startBtn.addEventListener("click", () => {
   SoundEngine.playUITap();
-  if (isOnline()) {
-    mpConfirmReady();
-    return;
-  }
   if (isLocal2P() && state.menuStep === "main") {
     state.menuStep = "pickPlayer2";
     refreshTopSelection();
@@ -1471,7 +1456,6 @@ function startIntroSequence() {
 function mpResetLobbyUI() {
   dom.lobbyIdle.classList.remove("is-hidden");
   dom.lobbyWaiting.classList.add("is-hidden");
-  dom.lobbyMatched.classList.add("is-hidden");
   dom.lobbyJoinRow.classList.add("is-hidden");
   dom.lobbyCodeInput.value = "";
   dom.lobbyIdleStatus.classList.remove("is-error");
@@ -1488,22 +1472,13 @@ function mpSetLobbyButtonsEnabled(enabled) {
   });
 }
 
+/** Host-only: shown right after Create Room / Quick Play, since the host's top was already
+ * submitted with the room — there's nothing left to pick, just wait for someone to join. */
 function mpShowWaiting(code) {
   dom.lobbyIdle.classList.add("is-hidden");
-  dom.lobbyMatched.classList.add("is-hidden");
   dom.lobbyWaiting.classList.remove("is-hidden");
   dom.lobbyCodeDisplay.textContent = code;
-}
-
-function mpShowMatched() {
-  dom.lobbyIdle.classList.add("is-hidden");
-  dom.lobbyWaiting.classList.add("is-hidden");
-  dom.lobbyMatched.classList.remove("is-hidden");
-  dom.lobbyMatchedStatus.textContent = t("opponentJoined");
-  dom.topPanel.classList.remove("is-hidden");
-  dom.startBtn.classList.remove("is-hidden");
-  dom.startBtn.textContent = t("readyBtn");
-  refreshTopSelection();
+  dom.topPanel.classList.add("is-hidden");
 }
 
 function mpErrorMessage(err) {
@@ -1526,29 +1501,8 @@ function mpLeaveIfActive() {
   state.online.active = false;
   state.online.role = null;
   state.online.code = null;
-  state.online.matched = false;
-  state.online.myReady = false;
-  state.online.oppReady = false;
   state.online.oppOnline = false;
   state.online.lastRoundWinnerIsHost = null;
-}
-
-async function mpConfirmReady() {
-  if (state.online.myReady) return;
-  state.online.myReady = true;
-  dom.topPanel.classList.add("is-hidden");
-  dom.startBtn.classList.add("is-hidden");
-  dom.lobbyMatchedStatus.textContent = t("waitingForOpponentPick");
-  const field = state.online.role === "host"
-    ? { hostTopIndex: state.playerPresetIndex }
-    : { guestTopIndex: state.playerPresetIndex };
-  try {
-    await MP.updateRoom(field);
-  } catch (err) {
-    state.online.myReady = false;
-    dom.topPanel.classList.remove("is-hidden");
-    dom.startBtn.classList.remove("is-hidden");
-  }
 }
 
 /** First-round setup: creates local entities from the room's confirmed top picks and starts the
@@ -1671,7 +1625,6 @@ function mpPushHostState() {
 
 function mpWireCallbacks() {
   if (!window.MP) return;
-  MP.onOpponentJoined = () => { state.online.matched = true; mpShowMatched(); };
   MP.onRoomUpdate = mpHandleRoomUpdate;
   MP.onRemoteState = mpApplyRemoteState;
   MP.onRemoteAction = mpApplyRemoteAction;
@@ -1691,7 +1644,7 @@ dom.lobbyCreateBtn.addEventListener("click", async () => {
   dom.lobbyIdleStatus.textContent = "";
   dom.lobbyIdleStatus.classList.remove("is-error");
   try {
-    const res = await MP.createRoom();
+    const res = await MP.createRoom(state.playerPresetIndex);
     state.online.active = true; state.online.role = res.role; state.online.code = res.code;
     mpShowWaiting(res.code);
   } catch (err) { mpShowIdleError(err); }
@@ -1711,10 +1664,9 @@ dom.lobbyJoinConfirmBtn.addEventListener("click", async () => {
   dom.lobbyIdleStatus.textContent = "";
   dom.lobbyIdleStatus.classList.remove("is-error");
   try {
-    const res = await MP.joinRoom(code);
+    const res = await MP.joinRoom(code, state.playerPresetIndex);
     state.online.active = true; state.online.role = res.role; state.online.code = res.code;
-    state.online.matched = true;
-    mpShowMatched();
+    mpBeginOnlineBattle(res.data); // the host's top is already in the room doc — start right away
   } catch (err) { mpShowIdleError(err); }
 });
 dom.lobbyCodeInput.addEventListener("keydown", (evt) => {
@@ -1727,9 +1679,9 @@ dom.lobbyQuickBtn.addEventListener("click", async () => {
   dom.lobbyIdleStatus.textContent = "";
   dom.lobbyIdleStatus.classList.remove("is-error");
   try {
-    const res = await MP.quickPlay();
+    const res = await MP.quickPlay(state.playerPresetIndex);
     state.online.active = true; state.online.role = res.role; state.online.code = res.code;
-    if (res.role === "host") { mpShowWaiting(res.code); } else { state.online.matched = true; mpShowMatched(); }
+    if (res.role === "host") { mpShowWaiting(res.code); } else { mpBeginOnlineBattle(res.data); }
   } catch (err) { mpShowIdleError(err); }
 });
 
