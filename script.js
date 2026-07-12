@@ -1602,7 +1602,12 @@ function mpApplyRemoteAction(action) {
   if (!player || !cpu) return;
   if (action.type === "launch") {
     if (cpu.launched) return;
-    launchEntity(cpu, action.originX, action.originY, action.dirX, action.dirY, action.power);
+    // The sender's origin/direction are expressed in ITS OWN screen space,
+    // where its own top always rests at the bottom. Mirror both across the
+    // arena's horizontal centerline so the opponent launches from the top,
+    // moving inward, instead of landing on top of the local player's top.
+    const mirroredY = 2 * state.arena.cy - action.originY;
+    launchEntity(cpu, action.originX, mirroredY, action.dirX, -action.dirY, action.power);
     SoundEngine.playLaunch();
     checkBothLaunched();
   } else if (action.type === "special") {
