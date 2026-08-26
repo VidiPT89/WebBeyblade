@@ -76,7 +76,7 @@
           <input class="lobby-code-input" id="lobby-code-input" type="text" maxlength="6" data-i18n-placeholder="roomCodePlaceholder" placeholder="CODE" />
           <button class="pill-btn" id="lobby-join-confirm-btn" type="button" data-i18n="joinBtn">Join</button>
         </div>
-        <p class="lobby-status" id="lobby-idle-status"></p>
+        <p class="lobby-status" id="lobby-idle-status" aria-live="polite"></p>
       </div>
       <div class="lobby-waiting is-hidden" id="lobby-waiting">
         <p class="lobby-code-label" data-i18n="roomCodeLabel">ROOM CODE</p>
@@ -130,7 +130,7 @@
           <p class="overlay-sub" id="round-result-sub" data-i18n="tapToContinue">Tap to continue</p>
         </div>
 
-        <div class="toast" id="special-toast"></div>
+        <div class="toast" id="special-toast" aria-live="polite"></div>
 
         <button class="special-btn" id="p1-special" type="button">
           <span class="special-label">SP</span>

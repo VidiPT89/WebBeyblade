@@ -1123,6 +1123,7 @@ function updateBattleHud() {
     dom.p2Special.classList.remove("is-hidden");
     dom.p2SpecialPct.textContent = `${Math.floor(cpu.specialGauge)}%`;
     dom.p2Special.classList.toggle("is-ready", cpu.specialGauge >= 100);
+    dom.p2Special.classList.toggle("readonly", isOnline());
   } else {
     dom.p2Special.classList.add("is-hidden");
   }
@@ -1732,6 +1733,25 @@ function init() {
   requestAnimationFrame(loop);
 }
 
-window.addEventListener("resize", initBgStars);
+// Debounced: mobile browsers fire resize repeatedly while their address bar
+// hides/shows on scroll, and rebuilding the whole starfield on every one of
+// those causes a visible flash/reset instead of a smooth background.
+let resizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(initBgStars, 200);
+});
+
+// Escape closes whichever modal is open, or toggles pause during a match —
+// keyboard players shouldn't be stuck reaching for the mouse/touch target.
+window.addEventListener("keydown", (evt) => {
+  if (evt.key !== "Escape") return;
+  const openModal = document.querySelector(".modal-overlay.is-open:not(#intro-overlay)");
+  if (openModal) { closeModal(openModal); return; }
+  if (state.phase === "launch" || state.phase === "battle") {
+    state.paused = !state.paused;
+    dom.pauseOverlay.classList.toggle("is-hidden", !state.paused);
+  }
+});
 
 init();

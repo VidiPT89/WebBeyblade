@@ -391,6 +391,9 @@ html, body {
   transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
 .special-btn.top { bottom: auto; top: 14px; border-color: var(--danger); }
+/* In Online mode the opponent's gauge is display-only — nothing local reacts
+   to tapping it, so it shouldn't invite a click. */
+.special-btn.top.readonly { cursor: default; pointer-events: none; }
 .special-btn.is-hidden { display: none; }
 .special-btn.is-ready { border-color: var(--accent); box-shadow: 0 0 18px rgba(255,210,122,0.6); }
 .special-label { font-family: var(--font-mono); font-weight: 800; font-size: 0.72rem; }
