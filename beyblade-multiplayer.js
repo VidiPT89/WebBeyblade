@@ -8,7 +8,7 @@
  * authoritative simulation locally and streams state snapshots; the other player ("guest")
  * renders those snapshots instead of simulating physics itself, and sends its own input
  * (launch / special move) as small action events for the host to apply. This sidesteps needing
- * bit-identical floating point determinism across three different runtimes (JS/Swift/Kotlin).
+ * bit-identical floating point determinism across different runtimes (JS/Swift).
  */
 import { auth, db, configured, ensureSignedIn } from "./firebase-init.js";
 import {

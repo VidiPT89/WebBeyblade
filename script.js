@@ -2,7 +2,7 @@
 
 /* ============================================================
    i18n — direct port of the L enum / TRANSLATIONS table used
-   in the iOS (Localization.swift) and Android siblings.
+   in the iOS sibling (Localization.swift).
    ============================================================ */
 
 const TRANSLATIONS = {
